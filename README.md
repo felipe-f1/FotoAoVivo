@@ -1,36 +1,40 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Mural de Fotos — Aniversário
 
-## Getting Started
+App para os convidados escanearem um QR Code, tirarem/enviarem uma foto pelo celular e verem ela aparecer ao vivo no telão do salão. No fim do evento, todas as fotos ficam salvas num álbum para a aniversariante rever.
 
-First, run the development server:
+## Páginas
+
+- `/` — painel com atalhos para as telas abaixo.
+- `/upload` — página que abre ao escanear o QR Code (câmera do celular).
+- `/telao` — tela para deixar aberta em tela cheia no computador ligado à TV/projetor. Atualiza sozinha a cada poucos segundos.
+- `/album` — galeria com todas as fotos, para rever depois do evento.
+- `/qr` — gera o QR Code que aponta para `/upload` (tem um botão de imprimir).
+
+## Como funciona o armazenamento
+
+- Em produção (Vercel), as fotos vão para o **Vercel Blob** (`BLOB_READ_WRITE_TOKEN`).
+- Em desenvolvimento local, sem esse token configurado, as fotos são salvas em `public/uploads` automaticamente — só para testar sem precisar configurar nada.
+
+## Rodando localmente
 
 ```bash
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Abra `http://localhost:3000`.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Colocando no ar (Vercel)
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+1. Suba este projeto para um repositório no GitHub.
+2. Importe o repositório em https://vercel.com/new.
+3. No projeto criado na Vercel, vá em **Storage → Create Database → Blob** e conecte ao projeto (isso cria a variável `BLOB_READ_WRITE_TOKEN` automaticamente).
+4. (Opcional) em **Settings → Environment Variables**, adicione `NEXT_PUBLIC_EVENT_NAME` com o nome do evento (ex: "Aniversário da Maria — 15 anos").
+5. Faça o deploy. A URL gerada pela Vercel é a que vai no QR Code — abra `/qr` nela para gerar e imprimir.
 
-## Learn More
+## No dia do evento
 
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+1. Abra `/telao` em tela cheia no computador ligado ao projetor/TV.
+2. Imprima ou exiba o QR Code de `/qr` nas mesas/entrada.
+3. Os convidados escaneiam, tiram a foto e enviam — ela aparece no telão automaticamente.
+4. Depois do evento, envie o link de `/album` para a aniversariante.
