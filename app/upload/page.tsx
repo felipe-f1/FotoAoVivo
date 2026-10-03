@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { upload } from "@vercel/blob/client";
+import { uploadPresigned } from "@vercel/blob/client";
 
 const eventName = process.env.NEXT_PUBLIC_EVENT_NAME || "Aniversário";
 
@@ -41,7 +41,7 @@ export default function UploadPage() {
       const extension = EXTENSION_BY_TYPE[file.type] ?? "jpg";
       const pathname = `photos/${Date.now()}-${crypto.randomUUID()}.${extension}`;
 
-      await upload(pathname, file, {
+      await uploadPresigned(pathname, file, {
         access: "public",
         handleUploadUrl: "/api/upload",
         contentType: file.type || "image/jpeg",
