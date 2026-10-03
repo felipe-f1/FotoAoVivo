@@ -12,13 +12,16 @@ App para os convidados escanearem um QR Code, tirarem/enviarem uma foto pelo cel
 
 ## Como funciona o armazenamento
 
-- Em produção (Vercel), as fotos vão para o **Vercel Blob** (`BLOB_READ_WRITE_TOKEN`).
-- Em desenvolvimento local, sem esse token configurado, as fotos são salvas em `public/uploads` automaticamente — só para testar sem precisar configurar nada.
+O celular do convidado sobe a foto **direto para o Vercel Blob** (upload client-side, via `@vercel/blob/client`). O servidor só emite um token de autorização de curta duração (`app/api/upload/route.ts`) — ele nunca recebe o arquivo em si, o que evita o limite de ~4.5MB de corpo de requisição das funções serverless da Vercel (uma foto de câmera de celular passa disso fácil).
+
+Por isso é necessário ter um **Vercel Blob Store** conectado ao projeto (variável `BLOB_READ_WRITE_TOKEN`) mesmo para rodar localmente.
 
 ## Rodando localmente
 
 ```bash
 npm install
+vercel link        # conecta esta pasta ao projeto já criado na Vercel
+vercel env pull .env.local   # baixa o BLOB_READ_WRITE_TOKEN real
 npm run dev
 ```
 

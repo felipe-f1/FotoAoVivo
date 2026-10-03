@@ -1,8 +1,17 @@
 "use client";
 
 import { useRef, useState } from "react";
+import { upload } from "@vercel/blob/client";
 
 const eventName = process.env.NEXT_PUBLIC_EVENT_NAME || "Aniversário";
+
+const EXTENSION_BY_TYPE: Record<string, string> = {
+  "image/jpeg": "jpg",
+  "image/png": "png",
+  "image/webp": "webp",
+  "image/heic": "heic",
+  "image/heif": "heif",
+};
 
 type Status = "idle" | "preview" | "uploading" | "success" | "error";
 
@@ -28,22 +37,19 @@ export default function UploadPage() {
     setErrorMessage("");
 
     try {
-      const formData = new FormData();
-      formData.append("photo", selectedFile.current);
+      const file = selectedFile.current;
+      const extension = EXTENSION_BY_TYPE[file.type] ?? "jpg";
+      const pathname = `photos/${Date.now()}-${crypto.randomUUID()}.${extension}`;
 
-      const response = await fetch("/api/upload", {
-        method: "POST",
-        body: formData,
+      await upload(pathname, file, {
+        access: "public",
+        handleUploadUrl: "/api/upload",
+        contentType: file.type || "image/jpeg",
       });
-
-      if (!response.ok) {
-        const body = await response.json().catch(() => ({}));
-        throw new Error(body.error || "Não foi possível enviar a foto.");
-      }
 
       setStatus("success");
     } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : "Erro ao enviar.");
+      setErrorMessage(error instanceof Error ? error.message : "Não foi possível enviar a foto.");
       setStatus("error");
     }
   }

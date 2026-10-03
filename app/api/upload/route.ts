@@ -1,34 +1,42 @@
-import { NextRequest, NextResponse } from "next/server";
-import { savePhoto } from "@/lib/storage";
+import { handleUpload, type HandleUploadBody } from "@vercel/blob/client";
+import { NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
 
-const MAX_SIZE = 15 * 1024 * 1024;
-const EXTENSION_BY_TYPE: Record<string, string> = {
-  "image/jpeg": "jpg",
-  "image/png": "png",
-  "image/webp": "webp",
-  "image/heic": "heic",
-  "image/heif": "heif",
-};
+const ALLOWED_CONTENT_TYPES = [
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+  "image/heic",
+  "image/heif",
+];
+const MAX_SIZE = 25 * 1024 * 1024;
 
-export async function POST(request: NextRequest) {
-  const formData = await request.formData();
-  const file = formData.get("photo");
+export async function POST(request: Request): Promise<NextResponse> {
+  const body = (await request.json()) as HandleUploadBody;
 
-  if (!(file instanceof File) || file.size === 0) {
-    return NextResponse.json({ error: "Nenhuma foto enviada." }, { status: 400 });
+  try {
+    const jsonResponse = await handleUpload({
+      body,
+      request,
+      onBeforeGenerateToken: async (pathname) => {
+        if (!pathname.startsWith("photos/")) {
+          throw new Error("Caminho de upload inválido.");
+        }
+
+        return {
+          allowedContentTypes: ALLOWED_CONTENT_TYPES,
+          maximumSizeInBytes: MAX_SIZE,
+          addRandomSuffix: false,
+        };
+      },
+    });
+
+    return NextResponse.json(jsonResponse);
+  } catch (error) {
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : "Não foi possível enviar a foto." },
+      { status: 400 }
+    );
   }
-
-  if (file.size > MAX_SIZE) {
-    return NextResponse.json({ error: "Foto muito grande (máx. 15MB)." }, { status: 400 });
-  }
-
-  const extension = EXTENSION_BY_TYPE[file.type] ?? "jpg";
-  const filename = `${Date.now()}-${crypto.randomUUID()}.${extension}`;
-  const buffer = Buffer.from(await file.arrayBuffer());
-
-  const url = await savePhoto(buffer, file.type || "image/jpeg", filename);
-
-  return NextResponse.json({ url });
 }
