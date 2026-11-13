@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { usePresence } from "@/lib/use-presence";
 
 const eventName = process.env.NEXT_PUBLIC_EVENT_NAME || "Aniversário";
 const POLL_INTERVAL_MS = 4000;
@@ -15,8 +16,13 @@ type Photo = {
 
 export default function TelaoPage() {
   const [photos, setPhotos] = useState<Photo[]>([]);
-  const [currentIndex, setCurrentIndex] = useState(0);
-  const newestUrlRef = useRef<string | null>(null);
+  // A foto atual é guardada pela URL, não pela posição: se uma foto for
+  // apagada no painel, as demais não "pulam" e o telão segue normalmente.
+  const [currentUrl, setCurrentUrl] = useState<string | null>(null);
+  const seenUrlsRef = useRef<Set<string> | null>(null);
+  const photosRef = useRef<Photo[]>([]);
+
+  usePresence("telao");
 
   useEffect(() => {
     let cancelled = false;
@@ -28,13 +34,33 @@ export default function TelaoPage() {
         if (cancelled || !Array.isArray(data.photos)) return;
 
         const nextPhotos: Photo[] = data.photos.slice(0, MAX_VISIBLE);
+        const previousPhotos = photosRef.current;
+        photosRef.current = nextPhotos;
         setPhotos(nextPhotos);
 
-        const newestUrl = nextPhotos[0]?.url ?? null;
-        if (newestUrl && newestUrl !== newestUrlRef.current) {
-          newestUrlRef.current = newestUrl;
-          setCurrentIndex(0);
-        }
+        const isFirstLoad = seenUrlsRef.current === null;
+        const seen = seenUrlsRef.current ?? new Set<string>();
+        const arrived = nextPhotos.filter((photo) => !seen.has(photo.url));
+        nextPhotos.forEach((photo) => seen.add(photo.url));
+        seenUrlsRef.current = seen;
+
+        setCurrentUrl((current) => {
+          // foto nova chegou: mostra na hora (a mais recente)
+          if (!isFirstLoad && arrived.length > 0) return arrived[0].url;
+          if (current && nextPhotos.some((photo) => photo.url === current)) return current;
+          if (nextPhotos.length === 0) return null;
+          // a foto que estava na tela foi apagada: segue para a próxima da fila
+          const oldIndex = current
+            ? previousPhotos.findIndex((photo) => photo.url === current)
+            : -1;
+          if (oldIndex >= 0) {
+            const survivor = previousPhotos
+              .slice(oldIndex + 1)
+              .find((photo) => nextPhotos.some((next) => next.url === photo.url));
+            if (survivor) return survivor.url;
+          }
+          return nextPhotos[0].url;
+        });
       } catch {
         // ignora falhas pontuais de rede e tenta de novo no próximo ciclo
       }
@@ -48,13 +74,21 @@ export default function TelaoPage() {
     };
   }, []);
 
+  const currentIndex = Math.max(
+    0,
+    photos.findIndex((photo) => photo.url === currentUrl)
+  );
+
+  // cada foto fica 5s na tela, contando a partir do momento em que apareceu
   useEffect(() => {
     if (photos.length < 2) return;
-    const interval = setInterval(() => {
-      setCurrentIndex((index) => (index + 1) % photos.length);
+    const timeout = setTimeout(() => {
+      const list = photosRef.current;
+      const index = list.findIndex((photo) => photo.url === currentUrl);
+      setCurrentUrl(list[(index + 1) % list.length]?.url ?? null);
     }, SLIDE_INTERVAL_MS);
-    return () => clearInterval(interval);
-  }, [photos.length]);
+    return () => clearTimeout(timeout);
+  }, [currentUrl, photos.length]);
 
   const currentPhoto = photos[currentIndex];
   const filmstrip = photos.slice(0, FILMSTRIP_SIZE);

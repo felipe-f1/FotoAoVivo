@@ -27,6 +27,12 @@ const links = [
     title: "Gerar QR Code",
     description: "Página para imprimir ou exibir o QR Code de acesso.",
   },
+  {
+    href: "/admin",
+    emoji: "🛠️",
+    title: "Painel Admin",
+    description: "Ver quem está acessando, conferir e apagar fotos (requer senha).",
+  },
 ];
 
 export default function Home() {

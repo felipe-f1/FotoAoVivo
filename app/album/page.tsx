@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { usePresence } from "@/lib/use-presence";
 
 const eventName = process.env.NEXT_PUBLIC_EVENT_NAME || "Aniversário";
 
@@ -13,6 +14,8 @@ export default function AlbumPage() {
   const [photos, setPhotos] = useState<Photo[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
+
+  usePresence("album");
 
   useEffect(() => {
     fetch("/api/photos", { cache: "no-store" })

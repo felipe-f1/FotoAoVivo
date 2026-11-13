@@ -1,7 +1,14 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { uploadPresigned } from "@vercel/blob/client";
+import {
+  getVisitorId,
+  getVisitorName,
+  sendPresence,
+  setVisitorName,
+  usePresence,
+} from "@/lib/use-presence";
 
 const eventName = process.env.NEXT_PUBLIC_EVENT_NAME || "Aniversário";
 
@@ -22,6 +29,22 @@ export default function UploadPage() {
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const galleryInputRef = useRef<HTMLInputElement>(null);
   const selectedFile = useRef<File | null>(null);
+  const [name, setName] = useState("");
+
+  usePresence("upload");
+
+  useEffect(() => {
+    // lê o nome salvo só no navegador, depois da hidratação
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setName(getVisitorName());
+  }, []);
+
+  function handleNameBlur() {
+    const trimmed = name.trim();
+    if (trimmed === getVisitorName()) return;
+    setVisitorName(trimmed);
+    sendPresence("upload");
+  }
 
   function handleFileChange(event: React.ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
@@ -40,7 +63,7 @@ export default function UploadPage() {
     try {
       const file = selectedFile.current;
       const extension = EXTENSION_BY_TYPE[file.type] ?? "jpg";
-      const pathname = `photos/${Date.now()}-${crypto.randomUUID()}.${extension}`;
+      const pathname = `photos/${Date.now()}_${getVisitorId()}_${crypto.randomUUID()}.${extension}`;
 
       await uploadPresigned(pathname, file, {
         access: "public",
@@ -77,6 +100,15 @@ export default function UploadPage() {
 
       {status === "idle" && (
         <div className="flex flex-col items-center gap-5">
+          <input
+            type="text"
+            value={name}
+            onChange={(event) => setName(event.target.value)}
+            onBlur={handleNameBlur}
+            maxLength={40}
+            placeholder="Seu nome (opcional)"
+            className="w-56 rounded-xl bg-white/5 border border-white/15 px-4 py-2.5 text-center text-sm placeholder:text-foreground/40 focus:outline-none focus:border-accent"
+          />
           <button
             onClick={() => cameraInputRef.current?.click()}
             className="animate-float w-56 h-56 rounded-full bg-gradient-to-br from-accent to-accent-2 flex flex-col items-center justify-center gap-2 text-lg font-semibold shadow-lg shadow-accent/30 active:scale-95 transition-transform"
