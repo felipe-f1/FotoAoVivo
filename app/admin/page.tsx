@@ -396,7 +396,6 @@ export default function AdminPage() {
         <section className="space-y-3">
           <p className="text-sm text-foreground/60">
             Cada aparelho que abriu o site. “Online” = com a página aberta nos últimos 3 minutos.
-            O nome aparece quando o convidado preenche na tela de envio.
           </p>
           {!data ? (
             <p className="text-foreground/50">Carregando acessos…</p>
