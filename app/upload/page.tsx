@@ -19,7 +19,8 @@ export default function UploadPage() {
   const [status, setStatus] = useState<Status>("idle");
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState("");
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
+  const galleryInputRef = useRef<HTMLInputElement>(null);
   const selectedFile = useRef<File | null>(null);
 
   function handleFileChange(event: React.ChangeEvent<HTMLInputElement>) {
@@ -58,7 +59,8 @@ export default function UploadPage() {
     selectedFile.current = null;
     setPreviewUrl(null);
     setStatus("idle");
-    if (fileInputRef.current) fileInputRef.current.value = "";
+    if (cameraInputRef.current) cameraInputRef.current.value = "";
+    if (galleryInputRef.current) galleryInputRef.current.value = "";
   }
 
   return (
@@ -74,20 +76,36 @@ export default function UploadPage() {
       </div>
 
       {status === "idle" && (
-        <button
-          onClick={() => fileInputRef.current?.click()}
-          className="animate-float w-56 h-56 rounded-full bg-gradient-to-br from-accent to-accent-2 flex flex-col items-center justify-center gap-2 text-lg font-semibold shadow-lg shadow-accent/30 active:scale-95 transition-transform"
-        >
-          <span className="text-5xl">📷</span>
-          Tirar / Enviar Foto
-        </button>
+        <div className="flex flex-col items-center gap-5">
+          <button
+            onClick={() => cameraInputRef.current?.click()}
+            className="animate-float w-56 h-56 rounded-full bg-gradient-to-br from-accent to-accent-2 flex flex-col items-center justify-center gap-2 text-lg font-semibold shadow-lg shadow-accent/30 active:scale-95 transition-transform"
+          >
+            <span className="text-5xl">📷</span>
+            Tirar Foto
+          </button>
+          <button
+            onClick={() => galleryInputRef.current?.click()}
+            className="w-56 rounded-xl border border-white/20 py-3 font-medium flex items-center justify-center gap-2 active:scale-95 transition-transform"
+          >
+            <span className="text-xl">🖼️</span>
+            Escolher da galeria
+          </button>
+        </div>
       )}
 
       <input
-        ref={fileInputRef}
+        ref={cameraInputRef}
         type="file"
         accept="image/*"
         capture="environment"
+        onChange={handleFileChange}
+        className="hidden"
+      />
+      <input
+        ref={galleryInputRef}
+        type="file"
+        accept="image/*"
         onChange={handleFileChange}
         className="hidden"
       />
