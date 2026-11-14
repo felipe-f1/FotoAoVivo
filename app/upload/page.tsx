@@ -4,6 +4,7 @@ import { useRef, useState } from "react";
 import { uploadPresigned } from "@vercel/blob/client";
 import { compressImage } from "@/lib/compress-image";
 import { getVisitorId, newId, usePresence } from "@/lib/use-presence";
+import PhotoEditor from "./photo-editor";
 
 const eventName = process.env.NEXT_PUBLIC_EVENT_NAME || "Aniversário";
 
@@ -24,6 +25,7 @@ export default function UploadPage() {
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const galleryInputRef = useRef<HTMLInputElement>(null);
   const selectedFile = useRef<File | null>(null);
+  const [editingFile, setEditingFile] = useState<File | null>(null);
 
   usePresence("upload");
 
@@ -81,7 +83,15 @@ export default function UploadPage() {
     }
   }
 
+  function handleEdited(edited: File) {
+    selectedFile.current = edited;
+    if (previewUrl) URL.revokeObjectURL(previewUrl);
+    setPreviewUrl(URL.createObjectURL(edited));
+    setEditingFile(null);
+  }
+
   function handleReset() {
+    setEditingFile(null);
     selectedFile.current = null;
     setPreviewUrl(null);
     setStatus("idle");
@@ -141,8 +151,15 @@ export default function UploadPage() {
           <img
             src={previewUrl}
             alt="Prévia da foto"
-            className="w-full aspect-square object-cover rounded-2xl border border-white/10"
+            className="w-full max-h-[55vh] object-contain rounded-2xl border border-white/10 bg-black/20"
           />
+          <button
+            onClick={() => setEditingFile(selectedFile.current)}
+            disabled={status === "uploading"}
+            className="w-full rounded-xl border border-white/20 py-3 font-medium flex items-center justify-center gap-2 disabled:opacity-40"
+          >
+            ✏️ Editar foto
+          </button>
           <div className="flex gap-3">
             <button
               onClick={handleReset}
@@ -160,6 +177,14 @@ export default function UploadPage() {
             </button>
           </div>
         </div>
+      )}
+
+      {editingFile && status === "preview" && (
+        <PhotoEditor
+          file={editingFile}
+          onDone={handleEdited}
+          onCancel={() => setEditingFile(null)}
+        />
       )}
 
       {status === "success" && (
