@@ -8,6 +8,7 @@ const POLL_INTERVAL_MS = 4000;
 const SLIDE_INTERVAL_MS = 5000;
 const MAX_VISIBLE = 60;
 const FILMSTRIP_SIZE = 10;
+const FETCH_TIMEOUT_MS = 8000;
 
 type Photo = {
   url: string;
@@ -21,6 +22,8 @@ export default function TelaoPage() {
   const [currentUrl, setCurrentUrl] = useState<string | null>(null);
   const seenUrlsRef = useRef<Set<string> | null>(null);
   const photosRef = useRef<Photo[]>([]);
+  const brokenUrlsRef = useRef<Set<string>>(new Set());
+  const [offline, setOffline] = useState(false);
 
   usePresence("telao");
 
@@ -28,12 +31,22 @@ export default function TelaoPage() {
     let cancelled = false;
 
     async function fetchPhotos() {
+      // se a internet travar, desiste da tentativa e mantém as fotos na tela
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
       try {
-        const response = await fetch("/api/photos", { cache: "no-store" });
+        const response = await fetch("/api/photos", {
+          cache: "no-store",
+          signal: controller.signal,
+        });
+        if (!response.ok) throw new Error(String(response.status));
         const data = await response.json();
         if (cancelled || !Array.isArray(data.photos)) return;
+        setOffline(false);
 
-        const nextPhotos: Photo[] = data.photos.slice(0, MAX_VISIBLE);
+        const nextPhotos: Photo[] = data.photos
+          .filter((photo: Photo) => !brokenUrlsRef.current.has(photo.url))
+          .slice(0, MAX_VISIBLE);
         const previousPhotos = photosRef.current;
         photosRef.current = nextPhotos;
         setPhotos(nextPhotos);
@@ -62,7 +75,10 @@ export default function TelaoPage() {
           return nextPhotos[0].url;
         });
       } catch {
-        // ignora falhas pontuais de rede e tenta de novo no próximo ciclo
+        // falha de rede: continua mostrando as fotos que já tem e tenta de novo
+        if (!cancelled) setOffline(true);
+      } finally {
+        clearTimeout(timeout);
       }
     }
 
@@ -92,6 +108,23 @@ export default function TelaoPage() {
 
   const currentPhoto = photos[currentIndex];
   const filmstrip = photos.slice(0, FILMSTRIP_SIZE);
+  const nextPhoto = photos.length > 1 ? photos[(currentIndex + 1) % photos.length] : null;
+
+  // pré-carrega a próxima foto para a troca ser instantânea
+  useEffect(() => {
+    if (!nextPhoto) return;
+    const image = new Image();
+    image.src = nextPhoto.url;
+  }, [nextPhoto]);
+
+  // foto que não abre (apagada ou corrompida): pula sem deixar a tela vazia
+  function handleBrokenImage(url: string) {
+    brokenUrlsRef.current.add(url);
+    const remaining = photosRef.current.filter((photo) => photo.url !== url);
+    photosRef.current = remaining;
+    setPhotos(remaining);
+    setCurrentUrl((current) => (current === url ? (remaining[0]?.url ?? null) : current));
+  }
 
   return (
     <main className="flex-1 flex flex-col p-6 sm:p-10 gap-6 min-h-screen">
@@ -100,6 +133,7 @@ export default function TelaoPage() {
           {eventName}
         </h1>
         <p className="text-foreground/50 text-sm">
+          {offline && <span className="mr-2 text-amber-400/80">● reconectando</span>}
           {photos.length} foto{photos.length === 1 ? "" : "s"} recebida
           {photos.length === 1 ? "" : "s"}
         </p>
@@ -125,6 +159,7 @@ export default function TelaoPage() {
               key={currentPhoto.url}
               src={currentPhoto.url}
               alt="Foto do evento"
+              onError={() => handleBrokenImage(currentPhoto.url)}
               className="animate-pop-in max-h-full max-w-full object-contain rounded-2xl shadow-2xl shadow-black/50"
             />
           </div>

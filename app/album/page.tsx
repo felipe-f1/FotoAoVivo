@@ -18,7 +18,7 @@ export default function AlbumPage() {
   usePresence("album");
 
   useEffect(() => {
-    fetch("/api/photos", { cache: "no-store" })
+    fetch("/api/photos")
       .then((response) => response.json())
       .then((data) => {
         if (Array.isArray(data.photos)) setPhotos(data.photos);
@@ -70,6 +70,8 @@ export default function AlbumPage() {
               <img
                 src={photo.url}
                 alt="Foto do evento"
+                loading="lazy"
+                decoding="async"
                 className="w-full h-full object-cover hover:scale-105 transition-transform"
               />
             </button>

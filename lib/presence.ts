@@ -1,20 +1,28 @@
-import { list, put } from "@vercel/blob";
+import { cacheGet, cacheSet } from "@/lib/shared-cache";
 
-export const PRESENCE_PREFIX = "presence/";
+// Os acessos ficam no cache da Vercel, não no Blob, para não gastar o limite
+// de operações do plano gratuito. Cada instância junta os sinais na memória e
+// grava no cache compartilhado no máximo a cada 15s.
 export const VISITOR_ID_PATTERN = /^[0-9a-f-]{36}$/;
-export const ONLINE_WINDOW_MS = 3 * 60 * 1000;
+const PRESENCE_KEY = "presence:all:v1";
+const FLUSH_MS = 15_000;
+const KEEP_MS = 12 * 60 * 60 * 1000;
+const MAX_VISITORS = 3000;
 
-export type PresenceRecord = {
+export type Visitor = {
   id: string;
-  name: string;
   device: string;
   page: string;
   firstSeen: string;
+  lastSeen: string;
 };
 
-export type Visitor = PresenceRecord & { lastSeen: string };
+type VisitorMap = Record<string, Visitor>;
 
 const KNOWN_PAGES = new Set(["upload", "telao", "album", "qr", "home"]);
+const pending: VisitorMap = {};
+let lastFlush = 0;
+let flushing: Promise<void> | null = null;
 
 export function describeDevice(userAgent: string): string {
   const os = /iPhone/.test(userAgent)
@@ -36,64 +44,86 @@ export function describeDevice(userAgent: string): string {
       ? "Edge"
       : /Instagram/.test(userAgent)
         ? "Instagram"
-        : /CriOS|Chrome\//.test(userAgent)
-          ? "Chrome"
-          : /FxiOS|Firefox\//.test(userAgent)
-            ? "Firefox"
-            : /Safari\//.test(userAgent)
-              ? "Safari"
-              : "Navegador";
+        : /WhatsApp/.test(userAgent)
+          ? "WhatsApp"
+          : /CriOS|Chrome\//.test(userAgent)
+            ? "Chrome"
+            : /FxiOS|Firefox\//.test(userAgent)
+              ? "Firefox"
+              : /Safari\//.test(userAgent)
+                ? "Safari"
+                : "Navegador";
   return `${os} · ${browser}`;
 }
 
-export function sanitizePresence(input: {
-  id?: unknown;
-  name?: unknown;
-  page?: unknown;
-  firstSeen?: unknown;
-}, userAgent: string): PresenceRecord | null {
-  if (typeof input.id !== "string" || !VISITOR_ID_PATTERN.test(input.id)) return null;
-  const name =
-    typeof input.name === "string" ? input.name.replace(/\s+/g, " ").trim().slice(0, 40) : "";
-  const page =
-    typeof input.page === "string" && KNOWN_PAGES.has(input.page) ? input.page : "home";
-  const firstSeenDate =
-    typeof input.firstSeen === "string" ? new Date(input.firstSeen) : new Date();
-  const firstSeen = Number.isNaN(firstSeenDate.getTime())
-    ? new Date().toISOString()
-    : firstSeenDate.toISOString();
-
-  return { id: input.id, name, page, firstSeen, device: describeDevice(userAgent) };
+function merge(target: VisitorMap, incoming: VisitorMap) {
+  for (const visitor of Object.values(incoming)) {
+    const current = target[visitor.id];
+    if (!current) {
+      target[visitor.id] = visitor;
+      continue;
+    }
+    target[visitor.id] = {
+      ...visitor,
+      firstSeen: current.firstSeen < visitor.firstSeen ? current.firstSeen : visitor.firstSeen,
+      lastSeen: current.lastSeen > visitor.lastSeen ? current.lastSeen : visitor.lastSeen,
+      page: current.lastSeen > visitor.lastSeen ? current.page : visitor.page,
+    };
+  }
 }
 
-export async function savePresence(record: PresenceRecord): Promise<void> {
-  await put(`${PRESENCE_PREFIX}${record.id}.json`, JSON.stringify(record), {
-    access: "public",
-    contentType: "application/json",
-    addRandomSuffix: false,
-    allowOverwrite: true,
-    cacheControlMaxAge: 60,
-  });
+function prune(map: VisitorMap): VisitorMap {
+  const cutoff = Date.now() - KEEP_MS;
+  const kept = Object.values(map)
+    .filter((v) => new Date(v.lastSeen).getTime() > cutoff)
+    .sort((a, b) => (a.lastSeen < b.lastSeen ? 1 : -1))
+    .slice(0, MAX_VISITORS);
+  return Object.fromEntries(kept.map((v) => [v.id, v]));
+}
+
+async function flush() {
+  flushing ??= (async () => {
+    try {
+      const batch = { ...pending };
+      for (const id of Object.keys(batch)) delete pending[id];
+      const shared = (await cacheGet<VisitorMap>(PRESENCE_KEY)) ?? {};
+      merge(shared, batch);
+      await cacheSet(PRESENCE_KEY, prune(shared), 24 * 60 * 60);
+      lastFlush = Date.now();
+    } catch {
+      // perder um ciclo de presença não é grave; o próximo sinal corrige
+    } finally {
+      flushing = null;
+    }
+  })();
+  return flushing;
+}
+
+export async function recordPresence(
+  input: { id?: unknown; page?: unknown },
+  userAgent: string
+): Promise<boolean> {
+  if (typeof input.id !== "string" || !VISITOR_ID_PATTERN.test(input.id)) return false;
+  const page = typeof input.page === "string" && KNOWN_PAGES.has(input.page) ? input.page : "home";
+  const now = new Date().toISOString();
+
+  const existing = pending[input.id];
+  pending[input.id] = {
+    id: input.id,
+    device: describeDevice(userAgent),
+    page,
+    firstSeen: existing?.firstSeen ?? now,
+    lastSeen: now,
+  };
+
+  if (Date.now() - lastFlush > FLUSH_MS || Object.keys(pending).length > 200) {
+    await flush();
+  }
+  return true;
 }
 
 export async function listVisitors(): Promise<Visitor[]> {
-  const { blobs } = await list({ prefix: PRESENCE_PREFIX, limit: 1000 });
-
-  const visitors = await Promise.all(
-    blobs.map(async (blob): Promise<Visitor | null> => {
-      try {
-        const response = await fetch(blob.url, { cache: "no-store" });
-        if (!response.ok) return null;
-        const record = (await response.json()) as PresenceRecord;
-        // a data do blob é sempre atual, mesmo se o conteúdo vier do cache
-        return { ...record, lastSeen: blob.uploadedAt.toISOString() };
-      } catch {
-        return null;
-      }
-    })
-  );
-
-  return visitors
-    .filter((visitor): visitor is Visitor => visitor !== null)
-    .sort((a, b) => new Date(b.lastSeen).getTime() - new Date(a.lastSeen).getTime());
+  await flush();
+  const shared = (await cacheGet<VisitorMap>(PRESENCE_KEY)) ?? {};
+  return Object.values(shared).sort((a, b) => (a.lastSeen < b.lastSeen ? 1 : -1));
 }

@@ -2,7 +2,8 @@
 
 import { useRef, useState } from "react";
 import { uploadPresigned } from "@vercel/blob/client";
-import { getVisitorId, usePresence } from "@/lib/use-presence";
+import { compressImage } from "@/lib/compress-image";
+import { getVisitorId, newId, usePresence } from "@/lib/use-presence";
 
 const eventName = process.env.NEXT_PUBLIC_EVENT_NAME || "Aniversário";
 
@@ -41,19 +42,41 @@ export default function UploadPage() {
     setErrorMessage("");
 
     try {
-      const file = selectedFile.current;
+      const file = await compressImage(selectedFile.current);
       const extension = EXTENSION_BY_TYPE[file.type] ?? "jpg";
-      const pathname = `photos/${Date.now()}_${getVisitorId()}_${crypto.randomUUID()}.${extension}`;
+      const pathname = `photos/${Date.now()}_${getVisitorId()}_${newId()}.${extension}`;
 
-      await uploadPresigned(pathname, file, {
-        access: "public",
-        handleUploadUrl: "/api/upload",
-        contentType: file.type || "image/jpeg",
-      });
+      // a internet da festa pode oscilar: tenta até 3 vezes antes de desistir
+      let lastError: unknown;
+      for (let attempt = 0; attempt < 3; attempt++) {
+        try {
+          await uploadPresigned(pathname, file, {
+            access: "public",
+            handleUploadUrl: "/api/upload",
+            contentType: file.type || "image/jpeg",
+          });
+          lastError = null;
+          break;
+        } catch (error) {
+          lastError = error;
+          await new Promise((resolve) => setTimeout(resolve, 1500 * (attempt + 1)));
+        }
+      }
+      if (lastError) throw lastError;
+
+      // avisa o servidor para a foto entrar no telão na hora
+      fetch("/api/photos/added", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ pathname }),
+        keepalive: true,
+      }).catch(() => {});
 
       setStatus("success");
-    } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : "Não foi possível enviar a foto.");
+    } catch {
+      setErrorMessage(
+        "Não foi possível enviar a foto. Verifique sua internet e tente de novo."
+      );
       setStatus("error");
     }
   }

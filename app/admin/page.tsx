@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 const eventName = process.env.NEXT_PUBLIC_EVENT_NAME || "Aniversário";
-const REFRESH_MS = 10_000;
+const REFRESH_MS = 15_000;
 const ONLINE_WINDOW_MS = 3 * 60 * 1000;
 
 type Photo = {
@@ -15,7 +15,6 @@ type Photo = {
 
 type Visitor = {
   id: string;
-  name: string;
   device: string;
   page: string;
   firstSeen: string;
@@ -156,8 +155,8 @@ export default function AdminPage() {
       if (preview && pathnames.includes(preview.pathname)) setPreview(null);
       setToast(
         pathnames.length === 1
-          ? "Foto apagada. Ela sai do telão em poucos segundos."
-          : `${pathnames.length} fotos apagadas. Elas saem do telão em poucos segundos.`
+          ? "Foto apagada. Ela sai do telão em até ~5 segundos."
+          : `${pathnames.length} fotos apagadas. Saem do telão em até ~5 segundos.`
       );
     } else {
       setToast("Não foi possível apagar. Tente de novo.");
@@ -201,8 +200,7 @@ export default function AdminPage() {
 
   function senderLabel(photo: Photo) {
     if (!photo.visitorId) return "Anônimo";
-    const visitor = visitorsById.get(photo.visitorId);
-    return visitor?.name || (visitor ? visitor.device : "Anônimo");
+    return visitorsById.get(photo.visitorId)?.device ?? "Convidado";
   }
 
   // ---------- telas de acesso ----------
@@ -407,7 +405,6 @@ export default function AdminPage() {
                 <thead className="bg-white/5 text-left text-foreground/60">
                   <tr>
                     <th className="px-3 py-2 font-medium">Status</th>
-                    <th className="px-3 py-2 font-medium">Nome</th>
                     <th className="px-3 py-2 font-medium">Aparelho</th>
                     <th className="px-3 py-2 font-medium">Página</th>
                     <th className="px-3 py-2 font-medium text-center">Fotos</th>
@@ -429,9 +426,6 @@ export default function AdminPage() {
                             <span className={`h-2 w-2 rounded-full ${online ? "bg-emerald-400" : "bg-white/20"}`} />
                             {online ? "Online" : "Offline"}
                           </span>
-                        </td>
-                        <td className="px-3 py-2">
-                          {visitor.name || <span className="text-foreground/40">Sem nome</span>}
                         </td>
                         <td className="px-3 py-2 text-foreground/70">{visitor.device}</td>
                         <td className="px-3 py-2 text-foreground/70">

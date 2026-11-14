@@ -1,10 +1,9 @@
 import { del } from "@vercel/blob";
 import { NextResponse, type NextRequest } from "next/server";
 import { isAdminRequest } from "@/lib/admin-auth";
+import { forgetPhotos, PHOTO_PATH_PATTERN } from "@/lib/storage";
 
 export const dynamic = "force-dynamic";
-
-const VALID_PHOTO_PATH = /^photos\/[\w.-]+$/;
 
 export async function DELETE(request: NextRequest) {
   if (!isAdminRequest(request)) {
@@ -12,15 +11,17 @@ export async function DELETE(request: NextRequest) {
   }
 
   const body = await request.json().catch(() => ({}));
-  const pathnames: unknown[] = Array.isArray(body.pathnames) ? body.pathnames : [];
+  const pathnames: unknown[] = Array.isArray(body.pathnames) ? body.pathnames.slice(0, 200) : [];
   const valid = pathnames.filter(
-    (p): p is string => typeof p === "string" && VALID_PHOTO_PATH.test(p)
+    (p): p is string => typeof p === "string" && PHOTO_PATH_PATTERN.test(p)
   );
   if (valid.length === 0) {
     return NextResponse.json({ error: "Nenhuma foto válida informada." }, { status: 400 });
   }
 
   try {
+    // tira do telão primeiro (instantâneo), depois apaga o arquivo
+    await forgetPhotos(valid);
     await del(valid);
     return NextResponse.json({ deleted: valid.length });
   } catch (error) {

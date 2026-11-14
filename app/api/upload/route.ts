@@ -1,6 +1,7 @@
 import { issueSignedToken } from "@vercel/blob";
 import { handleUploadPresigned, type HandleUploadPresignedBody } from "@vercel/blob/client";
 import { NextResponse } from "next/server";
+import { PHOTO_PATH_PATTERN } from "@/lib/storage";
 
 export const dynamic = "force-dynamic";
 
@@ -11,7 +12,9 @@ const ALLOWED_CONTENT_TYPES = [
   "image/heic",
   "image/heif",
 ];
-const MAX_SIZE = 25 * 1024 * 1024;
+// as fotos são reduzidas no celular antes do envio (~0,5–1,5 MB);
+// o limite alto só cobre aparelhos onde a redução não funciona
+const MAX_SIZE = 20 * 1024 * 1024;
 
 export async function POST(request: Request): Promise<NextResponse> {
   const body = (await request.json()) as HandleUploadPresignedBody;
@@ -21,7 +24,7 @@ export async function POST(request: Request): Promise<NextResponse> {
       body,
       request,
       getSignedToken: async (pathname) => {
-        if (!pathname.startsWith("photos/")) {
+        if (!PHOTO_PATH_PATTERN.test(pathname)) {
           throw new Error("Caminho de upload inválido.");
         }
 
