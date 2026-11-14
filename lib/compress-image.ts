@@ -1,8 +1,9 @@
 "use client";
 
-const MAX_DIMENSION = 2048;
-const JPEG_QUALITY = 0.85;
-const SKIP_BELOW_BYTES = 900 * 1024;
+// tamanho pensado para sinal fraco: ~250–500 KB por foto, ainda nítida na TV
+const MAX_DIMENSION = 1600;
+const JPEG_QUALITY = 0.82;
+const SKIP_BELOW_BYTES = 500 * 1024;
 
 /**
  * Reduz a foto no próprio celular antes do envio (uma foto de 4–8 MB vira
